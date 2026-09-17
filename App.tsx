@@ -38,7 +38,15 @@ const DEFAULT_LOCATIONS = [
   '실외기실', '대피공간', '드레스룸', '부부욕실', '공기질,라돈'
 ];
 
-const getPhotoUrl = (item: PhotoItem): string => (typeof item === 'string' ? item : item.url);
+const getPhotoUrl = (item: PhotoItem): string => {
+  if (!item) return '';
+  if (typeof item === 'string') return item;
+  if (typeof item === 'object') {
+    if ('url' in item && typeof item.url === 'string') return item.url;
+    if ('blob' in item && item.blob instanceof Blob) return URL.createObjectURL(item.blob);
+  }
+  return '';
+};
 
 const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
@@ -177,6 +185,20 @@ const App: React.FC = () => {
 
   if (!isAuthorized) return <LoginScreen onSuccess={() => setIsAuthorized(true)} />;
 
+  const groupedDefects = defects.reduce((acc, defect) => {
+    (acc[defect.location] = acc[defect.location] || []).push(defect);
+    return acc;
+  }, {} as Record<string, DefectItem[]>);
+
+  const activeLocationsInPreview = Object.keys(groupedDefects).sort((a, b) => {
+      const idxA = locations.indexOf(a);
+      const idxB = locations.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+  });
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col pt-safe relative">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-20">
@@ -210,6 +232,89 @@ const App: React.FC = () => {
           />
         )}
         {step === 'archive' && <ArchiveScreen onLoad={(inf, def, loc) => { setInfo(inf); setDefects(def); setLocations(loc); setStep('preview'); }} onGoBack={() => setStep(lastStep)} onGoHome={() => setStep('info')} />}
+
+        {step === 'preview' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden pb-44">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold text-gray-800 mb-1">보고서 미리보기</h2>
+                <p className="text-sm text-gray-500">내용을 확인하고 저장하세요.</p>
+              </div>
+            </div>
+
+            <div className="p-6 bg-gray-50 text-sm space-y-4">
+              <div className="space-y-6">
+                <h3 className="font-bold text-gray-800 ml-1 text-lg">하자 내역 (총 {defects.filter(d => d.location !== '공기질,라돈').length}건)</h3>
+                
+                {activeLocationsInPreview.length === 0 ? (
+                  <p className="text-center text-gray-400 py-4">등록된 하자가 없습니다.</p>
+                ) : (
+                  activeLocationsInPreview.map((loc) => (
+                    <div key={loc} className="space-y-3">
+                      <div className="flex items-center gap-2 border-b border-gray-200 pb-1">
+                        <MapPin size={16} className="text-brand-600" />
+                        <h4 className="font-bold text-gray-800 text-base">{loc}</h4>
+                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{groupedDefects[loc].length}건</span>
+                      </div>
+                      
+                      {groupedDefects[loc].map((d, i) => {
+                        const farList = d.farPhotos || [];
+                        const nearList = d.nearPhotos || [];
+                        const allUrls = [...farList, ...nearList].map(getPhotoUrl);
+
+                        return (
+                          <div key={d.id} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                            <div className="flex items-center gap-2 mb-3">
+                              <span className="flex-shrink-0 w-6 h-6 text-white rounded-full flex items-center justify-center text-xs font-bold" style={{ backgroundColor: 'rgb(0, 15, 85)' }}>
+                                {i + 1}
+                              </span>
+                              <p className="font-bold text-gray-800 line-clamp-1 flex-1">{d.description}</p>
+                            </div>
+                            
+                            <div className="grid grid-cols-5 gap-1 mb-3">
+                              {farList.map((p, idx) => (
+                                <div key={`far-${idx}`} className="aspect-square bg-gray-100 rounded overflow-hidden relative border border-green-200 cursor-zoom-in" onClick={() => openPhotoViewer(allUrls, idx)}>
+                                  <img src={getPhotoUrl(p)} className="w-full h-full object-cover" />
+                                  <div className="absolute bottom-0 left-0 right-0 bg-green-500/80 h-1.5"></div>
+                                </div>
+                              ))}
+                              {nearList.map((p, idx) => (
+                                <div key={`near-${idx}`} className="aspect-square bg-gray-100 rounded overflow-hidden relative border border-blue-200 cursor-zoom-in" onClick={() => openPhotoViewer(allUrls, farList.length + idx)}>
+                                  <img src={getPhotoUrl(p)} className="w-full h-full object-cover" />
+                                  <div className="absolute bottom-0 left-0 right-0 bg-blue-500/80 h-1.5"></div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="fixed bottom-0 left-0 right-0 p-4 pb-safe bg-white/90 backdrop-blur-md border-t border-gray-200 z-10 space-y-2">
+              <div className="flex gap-2 w-full max-w-md mx-auto">
+                <button
+                  onClick={handleGenerateReport}
+                  disabled={isGenerating || isZipping}
+                  className="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition"
+                >
+                  {isGenerating ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
+                  PDF 다운로드
+                </button>
+                <button
+                  onClick={() => setStep('capture')}
+                  className="flex-1 bg-white border border-gray-300 text-gray-700 font-bold py-3.5 px-4 rounded-xl hover:bg-gray-50 transition flex items-center justify-center gap-2"
+                >
+                  <RotateCcw size={18} />
+                  수정하기
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       <AnimatePresence>
