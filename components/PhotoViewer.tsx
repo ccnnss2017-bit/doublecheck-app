@@ -22,10 +22,10 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({ photos, initialIndex, onClose
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [index]);
+  }, [index, onClose]);
 
   const paginate = (newDirection: number) => {
-    if (isZoomed) return; // Prevent pagination while zoomed
+    if (isZoomed) return; // 확대 중일 때는 사진 넘기기 방지
     const newIndex = index + newDirection;
     if (newIndex >= 0 && newIndex < photos.length) {
       setDirection(newDirection);
@@ -60,7 +60,7 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({ photos, initialIndex, onClose
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center touch-none"
     >
-      {/* Header */}
+      {/* 상단 헤더 */}
       <div className="absolute top-0 left-0 right-0 p-4 z-50 flex justify-between items-center text-white pb-safe pt-safe-top bg-gradient-to-b from-black/50 to-transparent">
         <div className="text-sm font-medium tracking-wider">
           {index + 1} / {photos.length}
@@ -97,39 +97,32 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({ photos, initialIndex, onClose
               minScale={1}
               maxScale={5}
               centerOnInit={true}
-              onZoomStop={(ref) => setIsZoomed(ref.state.scale > 1.01)}
-              onPanningStop={(ref) => setIsZoomed(ref.state.scale > 1.01)}
-              panning={{ disabled: !isZoomed }} // Only allow pan if zoomed
+              onTransformed={(ref) => setIsZoomed(ref.state.scale > 1.01)} // 모바일 터치 충돌 해결 핵심 로직
+              panning={{ disabled: !isZoomed }} // 확대되었을 때만 이동 가능
               doubleClick={{ mode: "toggle" }}
             >
-              {({ zoomIn, zoomOut, resetTransform, state }) => {
-                // Ensure state is synced
-                if (state.scale <= 1.01 && isZoomed) setTimeout(() => setIsZoomed(false), 0);
-                if (state.scale > 1.01 && !isZoomed) setTimeout(() => setIsZoomed(true), 0);
-                
-                return (
-                  <React.Fragment>
-                    <div className="absolute top-16 right-4 z-50 flex flex-col gap-2">
-                       <button onClick={() => zoomIn()} className="p-2 bg-black/50 text-white rounded-full"><ZoomIn size={20} /></button>
-                       <button onClick={() => zoomOut()} className="p-2 bg-black/50 text-white rounded-full"><ZoomOut size={20} /></button>
-                       <button onClick={() => resetTransform()} className="p-2 bg-black/50 text-white rounded-full"><RotateCcw size={20} /></button>
-                    </div>
-                    <TransformComponent wrapperClass="w-full h-full flex items-center justify-center" contentClass="w-full h-full flex items-center justify-center">
-                      <img
-                        src={photos[index]}
-                        className="max-h-[85vh] max-w-[95vw] object-contain shadow-2xl"
-                        alt="Preview"
-                        onDragStart={e => e.preventDefault()}
-                      />
-                    </TransformComponent>
-                  </React.Fragment>
-                );
-              }}
+              {({ zoomIn, zoomOut, resetTransform }) => (
+                <React.Fragment>
+                  <div className="absolute top-16 right-4 z-50 flex flex-col gap-2">
+                     <button onClick={() => zoomIn()} className="p-2 bg-black/50 text-white rounded-full"><ZoomIn size={20} /></button>
+                     <button onClick={() => zoomOut()} className="p-2 bg-black/50 text-white rounded-full"><ZoomOut size={20} /></button>
+                     <button onClick={() => resetTransform()} className="p-2 bg-black/50 text-white rounded-full"><RotateCcw size={20} /></button>
+                  </div>
+                  <TransformComponent wrapperClass="w-full h-full flex items-center justify-center" contentClass="w-full h-full flex items-center justify-center">
+                    <img
+                      src={photos[index]}
+                      className="max-h-[85vh] max-w-[95vw] object-contain shadow-2xl"
+                      alt="Preview"
+                      onDragStart={e => e.preventDefault()}
+                    />
+                  </TransformComponent>
+                </React.Fragment>
+              )}
             </TransformWrapper>
           </motion.div>
         </AnimatePresence>
 
-        {/* Navigation Buttons (Desktop/Tablet) */}
+        {/* PC/태블릿용 좌우 네비게이션 화살표 */}
         {!isZoomed && index > 0 && (
           <button className="absolute left-4 p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition hidden md:block z-40" onClick={() => paginate(-1)}><ChevronLeft size={24} /></button>
         )}
@@ -140,4 +133,5 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({ photos, initialIndex, onClose
     </motion.div>
   );
 };
+
 export default PhotoViewer;
