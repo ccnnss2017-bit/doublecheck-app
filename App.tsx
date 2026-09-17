@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import JSZip from 'jszip';
 import InfoForm from './components/InfoForm';
@@ -207,8 +206,9 @@ const App: React.FC = () => {
             stepRef.current === 'capture' && 
             defectsRef.current.length > 0
         ) {
-            saveSnapshot(infoRef.current, defectsRef.current, locationsRef.current)
-                .catch(err => console.error("Auto-save failed", err));
+            // saveSnapshot is disabled for memory optimization
+// saveSnapshot(infoRef.current, defectsRef.current, locationsRef.current)
+//                .catch(err => console.error("Auto-save failed", err));
         }
     }, 10 * 60 * 1000); // Exactly 10 minutes
 
@@ -252,9 +252,7 @@ const App: React.FC = () => {
   const handleFinishCapture = () => {
     if (defects.length > 0 && isLoadedRef.current) {
         // UI 차단을 방지하기 위해 await 없이 백그라운드에서 백업 실행
-        saveSnapshot(infoRef.current, defectsRef.current, locationsRef.current).catch(e => {
-            console.error("최종 보고서 이동 전 백업 실패", e);
-        });
+        // saveSnapshot disabled
     }
     setStep('preview');
   };
@@ -265,7 +263,7 @@ const App: React.FC = () => {
     // 안전한 백업 (파일 생성 전 OOM 대비)
     try {
       if (isLoadedRef.current && defects.length > 0) {
-          await saveSnapshot(info, defects, locations);
+          // await saveSnapshot(info, defects, locations); // Disabled for memory optimization
       }
     } catch (e) {
       console.error("PDF 생성 전 스냅샷 저장 실패", e);
@@ -341,7 +339,7 @@ const App: React.FC = () => {
     // 안전한 백업 (파일 생성 전 OOM 대비)
     try {
       if (isLoadedRef.current) {
-          await saveSnapshot(info, defects, locations);
+          // await saveSnapshot(info, defects, locations); // Disabled for memory optimization
       }
     } catch (e) {
       console.error("ZIP 생성 전 스냅샷 저장 실패", e);
@@ -361,7 +359,7 @@ const App: React.FC = () => {
       const reportText = generateReportText();
       rootFolder.file(`${info.apartmentName}_${safeUnit}_하자내역.txt`, reportText);
 
-      const promises: Promise<void>[] = [];
+      const promises: Promise<any>[] = [];
 
       // Iterate through defects in the order they were added
       defects.forEach((d, defectIndex) => {
@@ -639,7 +637,7 @@ const App: React.FC = () => {
             onDefectSaved={async () => {
               if (isLoadedRef.current) {
                   try {
-                      await saveSnapshot(infoRef.current, defectsRef.current, locationsRef.current);
+                      // await saveSnapshot(infoRef.current, defectsRef.current, locationsRef.current); // Disabled for memory optimization
                   } catch (e) {
                       console.error("하자 등록 시 자동 백업 실패", e);
                   }
