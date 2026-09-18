@@ -5,13 +5,11 @@ import { LEGAL_STANDARDS } from './standards';
 
 export { LEGAL_STANDARDS };
 
-// 🌟 현장 전문 용어가 대거 추가된 초정밀 AI 매칭 알고리즘
 export const getMatchingStandard = (text: string) => {
   if (!text) return undefined;
   
   const target = text.trim();
   
-  // [자재 및 부위] - 대표님 요청 단어 + 추가 전문 단어
   const materialKeywords = [
       '코킹', '실리콘', '실란트', '마감', '타일', '도배', '벽지', '마루', '창호', '샷시', '샤시', '샷시틀', 
       '가구', '싱크대', '콘크리트', '방화문', '현관문', '단열', '석고보드', '외벽', 
@@ -22,17 +20,16 @@ export const getMatchingStandard = (text: string) => {
       '터닝도어', '붙박이장', '시스템가구', '일반가구', '마블씰', '폽업', '픽스창', '풍지판', '크리센트', '잠금쇠',
       '고무패킹', '고무가스켓', '전열 교환기', '전열교환기', '루버 창', '루버창', '빠찌링', '스트라이커',
       '코너비드', '졸리컷', '칼블럭', '칼블럭캡', '포세린타일', '폴리싱타일', '차음재', '하부씰',
-      '걸레받이', '방충망', '경첩', '힌지', '수전', '도기', '월패드' // AI 추가 단어
+      '걸레받이', '방충망', '경첩', '힌지', '수전', '도기', '월패드'
   ];
   
-  // [하자 증상 및 상태] - 대표님 요청 단어 + 추가 전문 단어
   const symptomKeywords = [
       '누락', '미시공', '들뜸', '박리', '균열', '크랙', '누수', '물고임', '구배', '역구배', '배수', 
       '긁힘', '찍힘', '파손', '탈락', '부풀음', '오염', '틈새', '단차', '경계',
       '흠집', '그을림', '배부름', '골조배부름', '버그홀', '열교현상', 
       '수직수평', '수평불량', '수직불량', '수직수평불량', '틀어짐', '오버홀', '오버 홀', 
       '평활도', '바닥평활도', '줄눈유도제', '줄눈', '메지',
-      '결로', '부식', '녹', '작동불량', '고정불량', '소음', '흔들림', '마감미흡' // AI 추가 단어
+      '결로', '부식', '녹', '작동불량', '고정불량', '소음', '흔들림', '마감미흡'
   ];
 
   const candidates = LEGAL_STANDARDS.map(std => {
@@ -43,22 +40,12 @@ export const getMatchingStandard = (text: string) => {
     std.keywords.forEach(keyword => {
        if (target.includes(keyword)) {
          score += 1; 
-         
-         if (materialKeywords.includes(keyword)) {
-            score += 10;
-            matchedMaterials++;
-         }
-         if (symptomKeywords.includes(keyword)) {
-            score += 20;
-            matchedSymptoms++;
-         }
+         if (materialKeywords.includes(keyword)) { score += 10; matchedMaterials++; }
+         if (symptomKeywords.includes(keyword)) { score += 20; matchedSymptoms++; }
        }
     });
 
-    // 🎯 자재와 증상이 동시에 발견되면 무조건 1순위로 올림 (+100점 잭팟)
-    if (matchedMaterials > 0 && matchedSymptoms > 0) {
-        score += 100;
-    }
+    if (matchedMaterials > 0 && matchedSymptoms > 0) score += 100;
 
     return { ...std, score };
   });
@@ -116,7 +103,6 @@ const getDefectHeaderHtml = (index: number, description: string) => `
   </div>
 `;
 
-// ✨ PDF 사진 비율 최적화 로직 적용 (잘림 방지 + 한 줄에 2장씩 배치)
 const getPhotoSectionHtml = (title: string, colorCode: string, photos: PhotoItem[]) => {
   const rows = chunk(photos, 2);
   let html = `
@@ -179,17 +165,6 @@ const getRadonLegalHtml = () => `
             <div style="color: #475569; font-size: 11px; line-height: 1.4; white-space: pre-wrap; margin-bottom: 8px;">측정 주체: 100세대 이상 신축 공동주택의 시공자는 시공 완료 후 실내공기질을 측정해야 합니다.
 입회 의무 (중요): 측정 시 반드시 환경부령으로 선정된 입주예정자의 입회하에 시공자 본인이 스스로 측정하거나, 공인된 실내공간오염물질 측정대행업체를 통해 측정하도록 법적 의무화가 되었습니다.
 제출 및 공고 의무: 공기질 측정 결과는 관할 지자체장(시장·군수·구청장 등)에게 제출해야 하며, 입주 개시 전에 주민들이 잘 볼 수 있는 장소에 의무적으로 공고해야 합니다.</div>
-
-            <div style="font-size: 12px; font-weight: 700; color: #1e293b; margin-bottom: 4px;">실내공기질 관리법 시행규칙 제6조제1항 (측정현장입회자의 선정 등)</div>
-            <div style="color: #475569; font-size: 11px; line-height: 1.4; white-space: pre-wrap; margin-bottom: 8px;">이 조항은 상위법(제9조제1항)에 명시된 '입주예정자 입회'를 현장에서 구체적으로 어떻게 진행할 것인지에 대한 행정적 통보 절차를 규정하고 있습니다. (2024년 신설 규정)
-사전 통보 기한: 시공자가 공기질 측정 현장에 참여할 입주예정자(이하 "측정현장입회자")를 선정하고자 할 때는, 반드시 공기질 측정일로부터 20일 전까지 입주예정자들에게 알려야 합니다.
-통보 방법: '신축 공동주택 실내공기질 측정 계획서'를 입주예정자에게 서면(전자문서 포함)으로 직접 알리거나, 관련 규정에 따른 방법(인터넷 홈페이지 등)으로 명확히 공고하여 측정 일정을 투명하게 공개해야 합니다.</div>
-
-            <div style="font-size: 12px; font-weight: 700; color: #1e293b; margin-bottom: 4px;">라돈(Radon) 측정 의무와 권고기준</div>
-            <div style="color: #475569; font-size: 11px; line-height: 1.4; white-space: pre-wrap;">라돈 측정은 일반적인 실내공기질 측정 절차(입주예정자 입회 등)와 동일하게 진행되며, 그 기준치는 시행규칙 제7조의2(신축 공동주택의 실내공기질 권고기준) 및 [별표 4의2]에 의해 명확한 수치로 통제받고 있습니다.
-법적 권고기준 수치: 라돈의 기준치는 4.0pCi/L 이하입니다. (그 외 폼알데하이드, 벤젠, 톨루엔 등도 규제 항목에 포함됩니다.)
-적용 대상 기준: 2018년 1월 1일 이후 사업계획 승인을 받은 신축 공동주택부터 라돈 측정이 법적 의무 항목으로 적용되었습니다.
-측정 방식의 제한: 시공사 임의의 측정 방식은 법적 효력이 없으며, 반드시 「환경분야 시험·검사 등에 관한 법률」에 따른 환경오염공정시험기준을 엄격히 준수하여 측정해야만 합니다.</div>
         </div>
     </div>
   </div>
@@ -214,8 +189,9 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
     container.innerHTML = html;
     await new Promise(resolve => setTimeout(resolve, 50));
 
+    // 🌟 화질 개선: scale을 2에서 3으로 올려 해상도 1.5배 증가 (OOM 방지 안전 마지노선)
     const canvas = await html2canvas(container, {
-      scale: 2, 
+      scale: 3, 
       useCORS: true,
       logging: false,
       windowWidth: 794,
@@ -223,7 +199,8 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
       backgroundColor: '#ffffff'
     });
 
-    const imgData = canvas.toDataURL('image/jpeg', 0.9); 
+    // 🌟 화질 개선: JPEG 퀄리티를 0.9에서 0.92로 상향 (용량 폭발 없이 선명도 확보)
+    const imgData = canvas.toDataURL('image/jpeg', 0.92); 
     const imgHeight = (canvas.height * pageWidth) / canvas.width;
 
     if (cursorY + imgHeight > pageHeight) {
@@ -245,7 +222,6 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
       return new Promise((resolve) => {
         img.onload = resolve;
         img.onerror = () => {
-          console.warn('Image failed to load in PDF:', img.src);
           img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
           resolve(null);
         };
@@ -254,7 +230,7 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
 
     await new Promise(resolve => setTimeout(resolve, 50));
     const canvas = await html2canvas(container, {
-      scale: 2, 
+      scale: 3, // 🌟 화질 개선 적용
       useCORS: true,
       logging: false,
       windowWidth: 794,
@@ -262,7 +238,7 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
       backgroundColor: '#ffffff'
     });
     const imgHeight = (canvas.height * pageWidth) / canvas.width;
-    const imgData = canvas.toDataURL('image/jpeg', 0.9); 
+    const imgData = canvas.toDataURL('image/jpeg', 0.92); // 🌟 화질 개선 적용
     container.innerHTML = '';
     return { imgData, imgHeight };
   };
