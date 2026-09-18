@@ -9,9 +9,10 @@ import { AppState, InspectionInfo, DefectItem, Snapshot, PhotoItem } from './typ
 import { generatePDF, getMatchingStandard } from './services/pdfService';
 import { 
   loadStep, loadInfo, loadDefects, loadLocations, 
-  saveStep, saveInfo, saveDefects, saveLocations, clearAllData, saveToArchive, checkAuth, clearAuth, updateAuthTimestamp 
+  saveStep, saveInfo, saveDefects, saveLocations, clearAllData, saveToArchive, checkAuth, clearAuth, updateAuthTimestamp,
+  saveSnapshot 
 } from './services/storage';
-import { ArrowLeft, FileText, Download, MapPin, Loader2, Archive, Copy, CheckCircle, RotateCcw, Wifi, WifiOff, LogOut, History, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, FileText, Download, MapPin, Loader2, Archive, Copy, CheckCircle, RotateCcw, Wifi, WifiOff, LogOut, History, Image as ImageIcon, AlertTriangle } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import PhotoViewer from './components/PhotoViewer';
 
@@ -58,8 +59,12 @@ const App: React.FC = () => {
   const [locations, setLocations] = useState<string[]>(DEFAULT_LOCATIONS);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
+  
+  // 모달 상태 관리
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [showSnapshotModal, setShowSnapshotModal] = useState(false);
+  const [resetStep, setResetStep] = useState<0 | 1 | 2>(0); // 0: 숨김, 1: 1차안내, 2: 최종경고
+
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   
   const [viewerState, setViewerState] = useState<{
@@ -78,6 +83,7 @@ const App: React.FC = () => {
   const viewerStateRef = useRef(viewerState);
   const showFinishModalRef = useRef(showFinishModal);
   const showSnapshotModalRef = useRef(showSnapshotModal);
+  const resetStepRef = useRef(resetStep);
 
   useEffect(() => { infoRef.current = info; }, [info]);
   useEffect(() => { defectsRef.current = defects; }, [defects]);
@@ -87,6 +93,7 @@ const App: React.FC = () => {
   useEffect(() => { viewerStateRef.current = viewerState; }, [viewerState]);
   useEffect(() => { showFinishModalRef.current = showFinishModal; }, [showFinishModal]);
   useEffect(() => { showSnapshotModalRef.current = showSnapshotModal; }, [showSnapshotModal]);
+  useEffect(() => { resetStepRef.current = resetStep; }, [resetStep]);
 
   // 스마트폰 하드웨어 뒤로가기 제어
   useEffect(() => {
@@ -105,6 +112,11 @@ const App: React.FC = () => {
       }
       if (showSnapshotModalRef.current) {
         setShowSnapshotModal(false);
+        history.pushState(null, '', window.location.href);
+        return;
+      }
+      if (resetStepRef.current > 0) {
+        setResetStep(0);
         history.pushState(null, '', window.location.href);
         return;
       }
@@ -190,6 +202,18 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // ✨ 임시저장(스냅샷) 백그라운드 엔진 완벽 복구 (3분마다 찰칵!)
+  useEffect(() => {
+    if (!isAuthorized) return;
+    const snapshotInterval = setInterval(() => {
+        if (isLoadedRef.current && stepRef.current === 'capture' && defectsRef.current.length > 0) {
+            saveSnapshot(infoRef.current, defectsRef.current, locationsRef.current)
+              .catch(e => console.error("Snapshot auto-save failed", e));
+        }
+    }, 3 * 60 * 1000); // 3분
+    return () => clearInterval(snapshotInterval);
+  }, [isAuthorized]);
+
   useEffect(() => { if (isLoadedRef.current) saveStep(step); }, [step]);
   useEffect(() => { if (isLoadedRef.current) saveInfo(info); }, [info]);
   useEffect(() => { if (isLoadedRef.current) saveDefects(defects); }, [defects]);
@@ -241,15 +265,12 @@ const App: React.FC = () => {
       alert("다운로드할 사진이 없습니다.");
       return;
     }
-
     setIsZipping(true);
-
     try {
       const zip = new JSZip();
       const safeUnit = info.unit.replace(/[\/\\]/g, '_').trim();
       const rootFolderName = `${info.apartmentName}_${safeUnit}_현장사진`;
       const rootFolder = zip.folder(rootFolderName);
-      
       if (!rootFolder) throw new Error("ZIP 폴더 생성 실패");
 
       const reportText = generateReportText();
@@ -261,7 +282,6 @@ const App: React.FC = () => {
          const safeDesc = d.description.replace(/[^a-zA-Z0-9가-힣\s]/g, '').trim().substring(0, 15) || '하자';
          const safeLoc = d.location.replace(/[^a-zA-Z0-9가-힣\s]/g, '').trim() || '기타';
          const locationFolder = rootFolder.folder(safeLoc);
-         
          const maxPhotos = Math.max((d.farPhotos||[]).length, (d.nearPhotos||[]).length);
          let fileOrder = 1;
 
@@ -273,11 +293,9 @@ const App: React.FC = () => {
                 const url = getPhotoUrl(p);
                 blobPromise = fetch(url).then(r => r.blob());
             }
-
             const prefix = String(defectIndex + 1).padStart(3, '0');
             const orderStr = String(orderNum).padStart(2, '0');
             const filename = `${prefix}_${safeLoc}_${safeDesc}_${orderStr}_${type}.jpg`;
-
             promises.push(
               blobPromise.then(blob => ({ filename, blob, locationFolder }))
             );
@@ -346,18 +364,18 @@ const App: React.FC = () => {
     }
   };
 
-  const handleReset = async () => {
-    if (confirm('모든 데이터가 초기화됩니다 (보관되지 않음). 처음으로 돌아가시겠습니까?')) {
-      setIsLoading(true);
-      await clearAllData();
-      setStep('info');
-      setDefects([]);
-      setLocations(DEFAULT_LOCATIONS);
-      setInfo(INITIAL_INFO);
-      localStorage.removeItem('info_form_draft'); 
-      isLoadedRef.current = true;
-      setIsLoading(false);
-    }
+  // ✨ 이중 안전장치: 진짜 초기화 실행 함수
+  const executeReset = async () => {
+    setIsLoading(true);
+    await clearAllData();
+    setStep('info');
+    setDefects([]);
+    setLocations(DEFAULT_LOCATIONS);
+    setInfo({ ...INITIAL_INFO, date: getLocalISOString() });
+    localStorage.removeItem('info_form_draft'); 
+    setResetStep(0);
+    isLoadedRef.current = true;
+    setIsLoading(false);
   };
 
   const handleLogout = () => {
@@ -422,7 +440,6 @@ const App: React.FC = () => {
         )}
         <div className="px-4 py-3 max-w-md mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {/* ✨ UI 보관함 뒤로가기 버튼 표시 규칙 활성화! */}
             {step !== 'info' && (
               <button 
                 onClick={() => {
@@ -438,9 +455,11 @@ const App: React.FC = () => {
               <FileText className="text-brand-600" size={24} /> Double Check
             </h1>
           </div>
+          
           <div className="flex items-center gap-2">
-            {step === 'capture' && defects.length > 0 && (
-               <button onClick={handleReset} className="text-xs text-red-500 font-medium px-2 py-1 rounded hover:bg-red-50">초기화</button>
+            {/* 초기화 버튼 누르면 1차 안내 모달 띄우기 */}
+            {(step === 'capture' || step === 'preview') && defects.length > 0 && (
+               <button onClick={() => setResetStep(1)} className="text-xs text-red-500 font-medium px-2 py-1 rounded hover:bg-red-50">초기화</button>
             )}
             {step === 'info' && (
                <button onClick={handleLogout} className="text-gray-400 p-2 hover:bg-gray-100 rounded-full" title="잠금(로그아웃)"><LogOut size={20}/></button>
@@ -465,6 +484,11 @@ const App: React.FC = () => {
             setLocations={setLocations}
             onFinish={handleFinishCapture}
             openPhotoViewer={openPhotoViewer}
+            onDefectSaved={() => {
+              // ✨ 임시저장(스냅샷) 엔진 - 하자를 한 건 등록할 때마다 즉시 저장 발동!
+              saveSnapshot(infoRef.current, defectsRef.current, locationsRef.current)
+                .catch(e => console.error("Snapshot error", e));
+            }}
           />
         )}
         {step === 'archive' && <ArchiveScreen onLoad={(inf, def, loc) => { setInfo(inf); setDefects(def); setLocations(loc); setStep('preview'); }} onGoBack={() => setStep(lastStep)} onGoHome={() => setStep('info')} />}
@@ -578,8 +602,65 @@ const App: React.FC = () => {
         <SnapshotModal onClose={() => setShowSnapshotModal(false)} onRestore={handleRestoreSnapshot} />
       )}
 
+      {/* ✨ 이중 안전장치: 작업 초기화 안내 모달 */}
+      {resetStep > 0 && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-red-500"></div>
+            
+            {resetStep === 1 && (
+              <>
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="bg-red-100 p-3 rounded-full text-red-600 flex-shrink-0"><RotateCcw size={28} /></div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">작업 초기화 안내</h3>
+                    <p className="text-sm text-gray-500 mt-1 leading-relaxed">
+                      현재 단지(현장)의 점검 내용을 초기화하고<br/>아예 새로운 단지 정보를 입력하시겠습니까?
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3 mb-6 text-xs text-gray-600 border border-gray-100">
+                   단순히 <b>고객 정보(동/호수 등)</b>만 수정하시려면 이 창을 닫고 왼쪽 위 <b>뒤로가기(⬅️) 화살표</b>를 눌러주세요.
+                </div>
+                <div className="flex flex-col gap-3">
+                  <button onClick={() => setResetStep(2)} className="w-full py-3.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition shadow-sm">
+                    새로운 단지 정보 입력하기
+                  </button>
+                  <button onClick={() => setResetStep(0)} className="w-full py-3.5 bg-white border border-gray-300 text-gray-700 font-bold rounded-xl hover:bg-gray-50 transition">
+                    취소 (하던 작업 계속하기)
+                  </button>
+                </div>
+              </>
+            )}
+
+            {resetStep === 2 && (
+              <>
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="bg-red-600 p-3 rounded-full text-white flex-shrink-0"><AlertTriangle size={28} /></div>
+                  <div>
+                    <h3 className="text-lg font-bold text-red-600">최종 경고</h3>
+                    <p className="text-sm text-gray-600 mt-1 leading-relaxed">
+                      지금까지 입력한 <b>모든 하자 내역과 사진이 영구적으로 삭제</b>됩니다. 정말 전부 지우시겠습니까?
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-3 mt-6">
+                  <button onClick={executeReset} className="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition shadow-sm">
+                    예, 모두 지우고 새로 시작합니다
+                  </button>
+                  <button onClick={() => setResetStep(0)} className="w-full py-3.5 bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-xl transition">
+                    아니오, 취소합니다
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 기존 점검 완료 모달 */}
       {showFinishModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-brand-500"></div>
             <div className="flex items-start gap-4 mb-4">
