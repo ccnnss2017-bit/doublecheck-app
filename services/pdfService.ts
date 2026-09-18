@@ -5,33 +5,65 @@ import { LEGAL_STANDARDS } from './standards';
 
 export { LEGAL_STANDARDS };
 
+// 🌟 현장 전문 용어가 대거 추가된 초정밀 AI 매칭 알고리즘
 export const getMatchingStandard = (text: string) => {
   if (!text) return undefined;
   
   const target = text.trim();
+  
+  // [자재 및 부위] - 대표님 요청 단어 + 추가 전문 단어
+  const materialKeywords = [
+      '코킹', '실리콘', '실란트', '마감', '타일', '도배', '벽지', '마루', '창호', '샷시', '샤시', '샷시틀', 
+      '가구', '싱크대', '콘크리트', '방화문', '현관문', '단열', '석고보드', '외벽', 
+      'MDF', 'PB', '마구리', '절단면', '유가', '트랩', '판넬', '유리판넬', '시트지',
+      '크롬', '수건걸이대', '욕조', '다용도 걸이대', '낙하방지봉', '욕실장', '평몰딩', '몰딩', '안전난간대',
+      '골조', '가벽', '우물천정', '도장', '페인트', '단열재', '아이소핑크', 'E보드', '이보드', '네오폴',
+      '모헤어', '자석감지기', '도어클로저', '차압감지기', '차압감지구', '동체감지기', '반침장도어', '반침장',
+      '터닝도어', '붙박이장', '시스템가구', '일반가구', '마블씰', '폽업', '픽스창', '풍지판', '크리센트', '잠금쇠',
+      '고무패킹', '고무가스켓', '전열 교환기', '전열교환기', '루버 창', '루버창', '빠찌링', '스트라이커',
+      '코너비드', '졸리컷', '칼블럭', '칼블럭캡', '포세린타일', '폴리싱타일', '차음재', '하부씰',
+      '걸레받이', '방충망', '경첩', '힌지', '수전', '도기', '월패드' // AI 추가 단어
+  ];
+  
+  // [하자 증상 및 상태] - 대표님 요청 단어 + 추가 전문 단어
+  const symptomKeywords = [
+      '누락', '미시공', '들뜸', '박리', '균열', '크랙', '누수', '물고임', '구배', '역구배', '배수', 
+      '긁힘', '찍힘', '파손', '탈락', '부풀음', '오염', '틈새', '단차', '경계',
+      '흠집', '그을림', '배부름', '골조배부름', '버그홀', '열교현상', 
+      '수직수평', '수평불량', '수직불량', '수직수평불량', '틀어짐', '오버홀', '오버 홀', 
+      '평활도', '바닥평활도', '줄눈유도제', '줄눈', '메지',
+      '결로', '부식', '녹', '작동불량', '고정불량', '소음', '흔들림', '마감미흡' // AI 추가 단어
+  ];
+
   const candidates = LEGAL_STANDARDS.map(std => {
     let score = 0;
-    const primaryKeywords = [
-        '타일', '도배', '벽지', '마루', '창호', '샷시', '가구', '싱크대', 
-        '콘크리트', '균열', '욕실', '변기', '세면대', '방화문', '현관문', 
-        '단열', '석고보드', '코킹', '실리콘', '실란트', '누수', '외벽',
-        'MDF', 'PB', '부풀음', '마구리', '절단면', '물고임', '구배', '배수', 
-        '줄눈', '메지', '유가', '트랩', '긁힘', '찍힘', '들뜸', '박리', '판넬',
-        '시트지',
-    ];
+    let matchedMaterials = 0;
+    let matchedSymptoms = 0;
     
     std.keywords.forEach(keyword => {
        if (target.includes(keyword)) {
-         score += 1;
-         if (primaryKeywords.includes(keyword)) {
+         score += 1; 
+         
+         if (materialKeywords.includes(keyword)) {
             score += 10;
+            matchedMaterials++;
+         }
+         if (symptomKeywords.includes(keyword)) {
+            score += 20;
+            matchedSymptoms++;
          }
        }
     });
+
+    // 🎯 자재와 증상이 동시에 발견되면 무조건 1순위로 올림 (+100점 잭팟)
+    if (matchedMaterials > 0 && matchedSymptoms > 0) {
+        score += 100;
+    }
+
     return { ...std, score };
   });
 
-  const matches = candidates.filter(c => c.score > 0);
+  const matches = candidates.filter(c => c.score >= 15);
   matches.sort((a, b) => b.score - a.score);
 
   return matches.length > 0 ? matches[0] : undefined;
