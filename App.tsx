@@ -70,7 +70,6 @@ const App: React.FC = () => {
   
   const isLoadedRef = useRef(false);
 
-  // 뒤로가기 제어용 Refs
   const infoRef = useRef(info);
   const defectsRef = useRef(defects);
   const locationsRef = useRef(locations);
@@ -89,7 +88,7 @@ const App: React.FC = () => {
   useEffect(() => { showFinishModalRef.current = showFinishModal; }, [showFinishModal]);
   useEffect(() => { showSnapshotModalRef.current = showSnapshotModal; }, [showSnapshotModal]);
 
-  // 스마트폰 하드웨어 뒤로가기 버튼 제어
+  // 스마트폰 하드웨어 뒤로가기 제어
   useEffect(() => {
     history.pushState(null, '', window.location.href);
     
@@ -423,8 +422,15 @@ const App: React.FC = () => {
         )}
         <div className="px-4 py-3 max-w-md mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {step !== 'info' && step !== 'archive' && (
-              <button onClick={() => setStep(step === 'preview' ? 'capture' : 'info')} className="p-2 -ml-2 rounded-full hover:bg-gray-100 text-gray-600">
+            {/* ✨ UI 보관함 뒤로가기 버튼 표시 규칙 활성화! */}
+            {step !== 'info' && (
+              <button 
+                onClick={() => {
+                  if (step === 'archive') setStep(lastStep);
+                  else setStep(step === 'preview' ? 'capture' : 'info');
+                }} 
+                className="p-2 -ml-2 rounded-full hover:bg-gray-100 text-gray-600"
+              >
                 <ArrowLeft size={20} />
               </button>
             )}
@@ -432,37 +438,17 @@ const App: React.FC = () => {
               <FileText className="text-brand-600" size={24} /> Double Check
             </h1>
           </div>
-          {/* ✨ 실수로 지웠던 상단 우측 보관함, 초기화, 로그아웃 버튼 완벽 복구! */}
           <div className="flex items-center gap-2">
             {step === 'capture' && defects.length > 0 && (
-               <button onClick={handleReset} className="text-xs text-red-500 font-medium px-2 py-1 rounded hover:bg-red-50">
-                 초기화
-               </button>
+               <button onClick={handleReset} className="text-xs text-red-500 font-medium px-2 py-1 rounded hover:bg-red-50">초기화</button>
             )}
             {step === 'info' && (
-               <button onClick={handleLogout} className="text-gray-400 p-2 hover:bg-gray-100 rounded-full" title="잠금(로그아웃)">
-                 <LogOut size={20}/>
-               </button>
+               <button onClick={handleLogout} className="text-gray-400 p-2 hover:bg-gray-100 rounded-full" title="잠금(로그아웃)"><LogOut size={20}/></button>
             )}
             {step !== 'archive' && (
               <>
-                <button 
-                    onClick={() => setShowSnapshotModal(true)}
-                    className="text-gray-600 p-2 hover:bg-gray-100 rounded-full"
-                    title="임시 보관함 (자동저장)"
-                >
-                    <History size={22} />
-                </button>
-                <button 
-                    onClick={() => {
-                      setLastStep(step);
-                      setStep('archive');
-                    }}
-                    className="text-gray-600 p-2 hover:bg-gray-100 rounded-full"
-                    title="보관함"
-                >
-                    <Archive size={22} />
-                </button>
+                <button onClick={() => setShowSnapshotModal(true)} className="text-gray-600 p-2 hover:bg-gray-100 rounded-full" title="임시 보관함 (자동저장)"><History size={22} /></button>
+                <button onClick={() => { setLastStep(step); setStep('archive'); }} className="text-gray-600 p-2 hover:bg-gray-100 rounded-full" title="보관함"><Archive size={22} /></button>
               </>
             )}
           </div>
@@ -481,7 +467,7 @@ const App: React.FC = () => {
             openPhotoViewer={openPhotoViewer}
           />
         )}
-        {step === 'archive' && <ArchiveScreen onLoad={handleLoadArchive} onGoBack={() => setStep(lastStep)} onGoHome={() => setStep('info')} />}
+        {step === 'archive' && <ArchiveScreen onLoad={(inf, def, loc) => { setInfo(inf); setDefects(def); setLocations(loc); setStep('preview'); }} onGoBack={() => setStep(lastStep)} onGoHome={() => setStep('info')} />}
 
         {step === 'preview' && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden pb-44">
@@ -558,7 +544,6 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* ✨ 실수로 지웠던 하단 사진 전체 다운로드, 점검 완료 저장 버튼 완벽 복구! */}
             <div className="fixed bottom-0 left-0 right-0 p-4 pb-safe bg-white/90 backdrop-blur-md border-t border-gray-200 z-10 space-y-2">
               <div className="flex gap-2 w-full max-w-md mx-auto">
                   <button onClick={handleGenerateReport} disabled={isGenerating || isZipping} className="flex-[2] bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg flex items-center justify-center gap-2 transition disabled:opacity-70 disabled:cursor-wait">
