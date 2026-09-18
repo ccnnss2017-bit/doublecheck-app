@@ -7,7 +7,7 @@ interface LoginScreenProps {
 }
 
 // Valid codes - restricted to only '호두과자'
-const VALID_CODES = ['호두과자'];
+const VALID_CODES = ['코두'];
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onSuccess }) => {
   const [code, setCode] = useState('');
