@@ -6,7 +6,7 @@ interface LoginScreenProps {
   onSuccess: () => void;
 }
 
-// Valid codes - restricted to only '호두과자'
+// Valid codes - restricted to only '코두'
 const VALID_CODES = ['코두'];
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onSuccess }) => {
