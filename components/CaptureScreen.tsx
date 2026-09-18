@@ -4,7 +4,6 @@ import { Camera, Trash2, Save, Plus, MapPin, ZoomIn, X, LayoutGrid, Pencil, Refr
 import { saveDraft, loadDraft, clearDraft, exportActiveDataToDataFile, mergeActiveDataFromFile, loadInfo } from '../services/storage';
 import { getMatchingStandard } from '../services/pdfService';
 import { motion, AnimatePresence, useDragControls, PanInfo } from 'framer-motion';
-import PhotoViewer from './PhotoViewer';
 
 interface CaptureScreenProps {
   defects: DefectItem[];
@@ -13,14 +12,14 @@ interface CaptureScreenProps {
   setLocations: React.Dispatch<React.SetStateAction<string[]>>;
   onFinish: () => void;
   onDefectSaved?: () => void;
-  openPhotoViewer: (photos: string[], index: number) => void; // 추가된 부모 연동 함수
+  openPhotoViewer: (photos: string[], index: number) => void;
 }
 
 interface PhotoData {
   url: string;
   blob: Blob;
   originalBlob?: Blob;
-  isOriginal?: boolean;
+  isOriginal?: boolean; 
 }
 
 const MIN_FAR = 1;
@@ -47,7 +46,8 @@ const compressImage = async (file: File): Promise<Blob> => {
 
   const options = { maxSizeMB: 2, maxWidthOrHeight: 2560, useWebWorker: true, initialQuality: 0.8, fileType: 'image/jpeg' };
   try {
-    return await imageCompression(fileToCompress as File, options);
+    const compressedFile = await imageCompression(fileToCompress as File, options);
+    return compressedFile;
   } catch (error) {
     return fileToCompress as Blob;
   }
@@ -122,8 +122,10 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ defects, setDefects, loca
   const [activeLocation, setActiveLocation] = useState<string>(locations[0]);
   const [isCreating, setIsCreating] = useState(false);
   const [isAddingLocation, setIsAddingLocation] = useState(false);
+  
   const [isRenaming, setIsRenaming] = useState(false);
   const [targetRenameLoc, setTargetRenameLoc] = useState<string | null>(null);
+
   const [isReordering, setIsReordering] = useState(false);
   const [newLocationName, setNewLocationName] = useState('');
   const [showTeamModal, setShowTeamModal] = useState(false);
@@ -145,7 +147,9 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ defects, setDefects, loca
   const cameraInputNearRef = useRef<HTMLInputElement>(null);
   const galleryInputNearRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const triggerFileInput = (ref: React.RefObject<HTMLInputElement>) => ref.current?.click();
+  const triggerFileInput = (ref: React.RefObject<HTMLInputElement>) => {
+    ref.current?.click();
+  };
   
   const constraintsRef = useRef<HTMLDivElement>(null);
   const [draggingLoc, setDraggingLoc] = useState<string | null>(null);
@@ -180,7 +184,7 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ defects, setDefects, loca
       if (!editingId && tempFarPhotos.length === 0 && tempNearPhotos.length === 0 && !description) return;
       saveDraft({
         location: activeLocation,
-        farPhotos: tempFarPhotos.map(p => ({ ...p, blob: undefined })),
+        farPhotos: tempFarPhotos.map(p => ({ ...p, blob: undefined })), 
         nearPhotos: tempNearPhotos.map(p => ({ ...p, blob: undefined })),
         description,
         editingId
@@ -228,7 +232,6 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ defects, setDefects, loca
           }
         }));
       };
-      
       const far = await restorePhotos(defect.farPhotos);
       const near = await restorePhotos(defect.nearPhotos);
       
@@ -356,7 +359,10 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ defects, setDefects, loca
   };
 
   const handlePrepareData = async () => {
-    if (defects.length === 0) { alert('공유할 데이터가 없습니다.'); return; }
+    if (defects.length === 0) {
+      alert('공유할 데이터가 없습니다.');
+      return;
+    }
     setPreparedFile(null);
     setIsProcessing(true);
     setProcessingMsg('데이터 파일 생성 중...');
@@ -390,15 +396,25 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ defects, setDefects, loca
     setProcessingMsg('데이터 분석 및 병합 중...');
     try {
       const { mergedDefects, newLocations } = await mergeActiveDataFromFile(file);
-      setLocations(prev => Array.from(new Set([...prev, ...newLocations])));
+      setLocations(prev => {
+        const unique = Array.from(new Set([...prev, ...newLocations]));
+        return unique;
+      });
       setDefects(prev => [...prev, ...mergedDefects]);
       setShowTeamModal(false);
       alert(`성공적으로 합쳐졌습니다! (+${mergedDefects.length}건)`);
     } catch (err: any) { alert('가져오기 실패: ' + err.message); } finally { setIsProcessing(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
   };
 
-  const getDisplayUrl = (item: PhotoItem) => (typeof item === 'string' ? item : item.url);
-  const getAllPhotoUrls = (defect: DefectItem) => [...defect.farPhotos.map(getDisplayUrl), ...defect.nearPhotos.map(getDisplayUrl)];
+  const getDisplayUrl = (item: PhotoItem) => {
+    if (typeof item === 'string') return item;
+    return item.url;
+  };
+  
+  const getAllPhotoUrls = (defect: DefectItem) => [
+     ...(defect.farPhotos || []).map(getDisplayUrl),
+     ...(defect.nearPhotos || []).map(getDisplayUrl)
+  ];
 
   const handleDrag = (e: any, { point }: PanInfo, loc: string) => {
     const elements = Array.from(document.querySelectorAll('[data-loc]'));
@@ -426,11 +442,20 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ defects, setDefects, loca
 
     if (isRenaming) {
         return (
-            <button key={loc} onClick={() => { setTargetRenameLoc(loc); setNewLocationName(loc); }} className={`relative px-4 py-2 rounded-xl text-sm font-bold transition-all border whitespace-nowrap animate-pulse border-brand-300 bg-brand-50 text-brand-700`}>
-                <PenLine size={12} className="inline mr-1" /> {loc}
+            <button 
+                key={loc} 
+                onClick={() => {
+                    setTargetRenameLoc(loc);
+                    setNewLocationName(loc); 
+                }} 
+                className={`relative px-4 py-2 rounded-xl text-sm font-bold transition-all border whitespace-nowrap animate-pulse border-brand-300 bg-brand-50 text-brand-700`}
+            >
+                <PenLine size={12} className="inline mr-1" />
+                {loc}
             </button>
         );
     }
+
     return (
       <button key={loc} onClick={() => !isReordering && setActiveLocation(loc)} className={`px-4 py-2 rounded-xl text-sm font-bold transition-all border whitespace-nowrap ${isActive ? 'bg-brand-600 text-white border-brand-600 shadow-md' : 'bg-white text-gray-600 border-gray-200'}`}>
         {loc} {count > 0 && <span className="text-[10px] ml-1 opacity-70">({count})</span>}
@@ -473,12 +498,14 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ defects, setDefects, loca
                 ))}
                 {tempFarPhotos.length < MAX_FAR && (
                   <button onClick={() => triggerFileInput(cameraInputFarRef)} className="aspect-square rounded-lg flex flex-col items-center justify-center bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 transition shadow-sm active:scale-95">
-                      <Camera size={24} className="mb-1"/><span className="text-[10px] font-bold">사진 촬영</span>
+                      <Camera size={24} className="mb-1"/>
+                      <span className="text-[10px] font-bold">사진 촬영</span>
                   </button>
                 )}
                 {tempFarPhotos.length < MAX_FAR && (
                   <button onClick={() => triggerFileInput(galleryInputFarRef)} className="aspect-square rounded-lg flex flex-col items-center justify-center bg-gray-50 border border-gray-200 text-gray-500 hover:bg-gray-100 transition active:scale-95">
-                      <ImageIcon size={24} className="mb-1"/><span className="text-[10px] font-bold">앨범</span>
+                      <ImageIcon size={24} className="mb-1"/>
+                      <span className="text-[10px] font-bold">앨범</span>
                   </button>
                 )}
               </div>
@@ -495,12 +522,14 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ defects, setDefects, loca
                 ))}
                 {tempNearPhotos.length < MAX_NEAR && (
                   <button onClick={() => triggerFileInput(cameraInputNearRef)} className="aspect-square rounded-lg flex flex-col items-center justify-center bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 transition shadow-sm active:scale-95">
-                      <Camera size={24} className="mb-1"/><span className="text-[10px] font-bold">사진 촬영</span>
+                      <Camera size={24} className="mb-1"/>
+                      <span className="text-[10px] font-bold">사진 촬영</span>
                   </button>
                 )}
                 {tempNearPhotos.length < MAX_NEAR && (
                    <button onClick={() => triggerFileInput(galleryInputNearRef)} className="aspect-square rounded-lg flex flex-col items-center justify-center bg-gray-50 border border-gray-200 text-gray-500 hover:bg-gray-100 transition active:scale-95">
-                      <ImageIcon size={24} className="mb-1"/><span className="text-[10px] font-bold">앨범</span>
+                      <ImageIcon size={24} className="mb-1"/>
+                      <span className="text-[10px] font-bold">앨범</span>
                   </button>
                 )}
               </div>
@@ -509,6 +538,7 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ defects, setDefects, loca
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">하자 내용</label>
             <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="내용을 입력하세요 (예: 거실 벽지 들뜸)" className="w-full p-4 border rounded-xl h-24 focus:ring-2 focus:ring-brand-500 outline-none resize-none text-sm" />
+            
             {matchedStandard && (
                 <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs animate-in slide-in-from-top-2 fade-in">
                     <h5 className="font-bold text-yellow-800 flex items-center gap-2 mb-1">
@@ -537,10 +567,25 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ defects, setDefects, loca
             <button onClick={() => setIsReordering(true)} className={`text-[10px] font-bold px-2 py-1 rounded border flex items-center gap-1 ${isReordering ? 'bg-brand-600 text-white border-brand-600 shadow-sm' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
                <ArrowLeftRight size={12}/> 순서
             </button>
-            <button onClick={() => { setIsRenaming(!isRenaming); setTargetRenameLoc(null); setNewLocationName(''); setIsAddingLocation(false); }} className={`text-[10px] font-bold px-2 py-1 rounded border flex items-center gap-1 ${isRenaming ? 'bg-brand-600 text-white border-brand-600 shadow-sm' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+            <button 
+                onClick={() => {
+                    setIsRenaming(!isRenaming);
+                    setTargetRenameLoc(null);
+                    setNewLocationName('');
+                    setIsAddingLocation(false);
+                }} 
+                className={`text-[10px] font-bold px-2 py-1 rounded border flex items-center gap-1 ${isRenaming ? 'bg-brand-600 text-white border-brand-600 shadow-sm' : 'bg-gray-50 text-gray-600 border-gray-200'}`}
+            >
                <PenLine size={12}/> 이름변경
             </button>
-            <button onClick={() => { setIsAddingLocation(true); setIsRenaming(false); setTargetRenameLoc(null); }} className="text-[10px] text-brand-600 font-bold px-2 py-1 bg-brand-50 rounded border border-brand-100">
+            <button 
+                onClick={() => {
+                    setIsAddingLocation(true);
+                    setIsRenaming(false);
+                    setTargetRenameLoc(null);
+                }} 
+                className="text-[10px] text-brand-600 font-bold px-2 py-1 bg-brand-50 rounded border border-brand-100"
+            >
                 + 추가
             </button>
           </div>
@@ -585,9 +630,9 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ defects, setDefects, loca
                 </div>
               </div>
               <div className="grid grid-cols-4 gap-2">
-                {[...d.farPhotos, ...d.nearPhotos].slice(0, 4).map((p, idx) => (
-                  <div key={idx} className="aspect-square rounded-lg overflow-hidden bg-gray-100 border cursor-zoom-in relative z-10" onClick={() => openPhotoViewer(getAllPhotoUrls(d), idx)}>
-                    <img src={getDisplayUrl(p)} className="w-full h-full object-cover pointer-events-none" loading="lazy" />
+                {[...(d.farPhotos || []), ...(d.nearPhotos || [])].slice(0, 4).map((p, idx) => (
+                  <div key={idx} className="aspect-square rounded-lg overflow-hidden bg-gray-100 border cursor-zoom-in" onClick={() => openPhotoViewer(getAllPhotoUrls(d), idx)}>
+                    <img src={getDisplayUrl(p)} className="w-full h-full object-cover" loading="lazy" />
                   </div>
                 ))}
               </div>
@@ -610,7 +655,16 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ defects, setDefects, loca
             <div className="flex-1 overflow-y-auto p-4 bg-gray-50 pb-32">
                <div ref={constraintsRef} className="grid grid-cols-3 gap-3 max-w-md mx-auto relative">
                  {locations.map(loc => (
-                    <SortableItem key={loc} loc={loc} active={loc === activeLocation} draggingLoc={draggingLoc} constraintsRef={constraintsRef} onDragStart={setDraggingLoc} onDragEnd={() => setDraggingLoc(null)} onDragTrigger={handleDrag} />
+                    <SortableItem 
+                      key={loc} 
+                      loc={loc} 
+                      active={loc === activeLocation} 
+                      draggingLoc={draggingLoc} 
+                      constraintsRef={constraintsRef}
+                      onDragStart={setDraggingLoc} 
+                      onDragEnd={() => setDraggingLoc(null)} 
+                      onDragTrigger={handleDrag} 
+                    />
                  ))}
                </div>
             </div>
@@ -622,30 +676,90 @@ const CaptureScreen: React.FC<CaptureScreenProps> = ({ defects, setDefects, loca
           <div className="bg-white rounded-3xl w-full max-w-sm p-8 shadow-2xl relative border border-gray-100" onClick={e => e.stopPropagation()}>
             <div className="text-center mb-6">
               <h3 className="text-xl font-bold text-gray-900 flex items-center justify-center gap-2">
-                 <Users className="text-brand-600" size={24} /> 협업 데이터 관리
+                 <Users className="text-brand-600" size={24} />
+                 협업 데이터 관리
               </h3>
+              <p className="text-gray-500 text-xs mt-2 leading-relaxed">
+                작업한 데이터를 파일로 내보내거나,<br/>
+                팀원의 데이터를 불러와 하나로 합칠 수 있습니다.
+              </p>
             </div>
+
             {!preparedFile ? (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3 mb-2">
-                    <button onClick={handlePrepareData} disabled={isProcessing} className="p-4 h-40 rounded-3xl bg-white border-2 border-brand-100 hover:border-brand-500 hover:bg-brand-50/50 transition-all flex flex-col items-center justify-center gap-3">
-                        <Share2 size={24} className="text-brand-600" />
-                        <span className="font-bold text-gray-800 text-sm">내보내기</span>
+                    {/* Export Card */}
+                    <button 
+                        onClick={handlePrepareData} 
+                        disabled={isProcessing} 
+                        className="group relative p-4 h-40 rounded-3xl bg-white border-2 border-brand-100 hover:border-brand-500 hover:bg-brand-50/50 transition-all duration-300 flex flex-col items-center justify-center gap-3 shadow-sm hover:shadow-md active:scale-95"
+                    >
+                        <div className="w-12 h-12 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner border border-brand-100">
+                            <Share2 size={24} />
+                        </div>
+                        <div className="text-center">
+                            <div className="font-bold text-gray-800 text-sm group-hover:text-brand-700">내보내기</div>
+                            <div className="text-[10px] text-gray-400 mt-1 font-medium">내 점검 데이터를<br/>파일로 생성</div>
+                        </div>
                     </button>
-                    <button onClick={() => fileInputRef.current?.click()} disabled={isProcessing} className="p-4 h-40 rounded-3xl bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:bg-indigo-50/50 transition-all flex flex-col items-center justify-center gap-3">
-                         <FolderInput size={24} className="text-indigo-600" />
-                         <span className="font-bold text-gray-800 text-sm">합치기</span>
+
+                    {/* Import Card */}
+                    <button 
+                        onClick={() => fileInputRef.current?.click()} 
+                        disabled={isProcessing} 
+                        className="group relative p-4 h-40 rounded-3xl bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:bg-indigo-50/50 transition-all duration-300 flex flex-col items-center justify-center gap-3 shadow-sm hover:shadow-md active:scale-95"
+                    >
+                         <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner border border-indigo-100">
+                            <FolderInput size={24} />
+                        </div>
+                        <div className="text-center">
+                            <div className="font-bold text-gray-800 text-sm group-hover:text-indigo-700">합치기</div>
+                            <div className="text-[10px] text-gray-400 mt-1 font-medium">팀원 파일을 가져와<br/>하나로 병합</div>
+                        </div>
                         <input type="file" ref={fileInputRef} onChange={handleMergeFileChange} accept=".zip,.json" className="hidden" />
                     </button>
                 </div>
               </div>
             ) : (
-              <div className="space-y-4 text-center">
-                <button onClick={executeDownload} className="w-full py-4 bg-brand-600 text-white font-bold rounded-2xl">파일 내보내기</button>
-                <button onClick={() => setPreparedFile(null)} className="text-sm text-gray-400 underline">뒤로 가기</button>
+              <div className="space-y-4 text-center animate-in zoom-in-95 duration-300">
+                <div className="bg-green-50 rounded-2xl p-6 border border-green-100 mb-6">
+                    <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
+                        <FileJson size={32} />
+                    </div>
+                    <p className="text-green-800 font-bold text-lg mb-1">파일 준비 완료!</p>
+                    <p className="text-green-600 text-xs">이제 아래 버튼을 눌러 파일을 저장하고<br/>카카오톡 등으로 팀원에게 공유하세요.</p>
+                </div>
+                
+                <button 
+                    onClick={executeDownload} 
+                    className="w-full py-4 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-2xl shadow-lg hover:shadow-brand-500/30 transition-all flex items-center justify-center gap-2 active:scale-95"
+                >
+                    <Download size={20} />
+                    파일 내보내기
+                </button>
+                <button onClick={() => setPreparedFile(null)} className="text-sm text-gray-400 hover:text-gray-600 underline decoration-gray-300 underline-offset-4 py-2">
+                    뒤로 가기
+                </button>
               </div>
             )}
-            <button onClick={() => setShowTeamModal(false)} className="w-full mt-6 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl text-sm">닫기</button>
+
+            {isProcessing && (
+              <div className="absolute inset-0 bg-white/95 rounded-3xl flex flex-col items-center justify-center z-20 backdrop-blur-sm">
+                <div className="relative">
+                    <RefreshCw className="animate-spin text-brand-600 mb-4" size={40} />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-2 h-2 bg-brand-600 rounded-full"></div>
+                    </div>
+                </div>
+                <p className="text-brand-800 font-bold animate-pulse">{processingMsg}</p>
+              </div>
+            )}
+            
+            {!isProcessing && !preparedFile && (
+              <button onClick={() => setShowTeamModal(false)} className="w-full mt-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-xl transition text-sm">
+                닫기
+              </button>
+            )}
           </div>
         </div>
       )}
