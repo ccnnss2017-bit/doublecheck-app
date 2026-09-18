@@ -1,29 +1,20 @@
-
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { DefectItem, InspectionInfo, PhotoItem } from '../types';
 import { LEGAL_STANDARDS } from './standards';
 
-// 국토교통부 고시 및 건축공사 표준시방서(KCS) 기반 데이터
 export { LEGAL_STANDARDS };
 
 export const getMatchingStandard = (text: string) => {
   if (!text) return undefined;
   
-  // Normalize text matching
   const target = text.trim();
-
-  // 점수 기반 매칭 시스템
   const candidates = LEGAL_STANDARDS.map(std => {
     let score = 0;
-    
-    // 주요 카테고리 명사 (가중치 높음)
     const primaryKeywords = [
-        // 기존 키워드
         '타일', '도배', '벽지', '마루', '창호', '샷시', '가구', '싱크대', 
         '콘크리트', '균열', '욕실', '변기', '세면대', '방화문', '현관문', 
         '단열', '석고보드', '코킹', '실리콘', '실란트', '누수', '외벽',
-        // 추가된 상세 키워드 (가중치 적용을 위해)
         'MDF', 'PB', '부풀음', '마구리', '절단면', '물고임', '구배', '배수', 
         '줄눈', '메지', '유가', '트랩', '긁힘', '찍힘', '들뜸', '박리', '판넬',
         '시트지',
@@ -31,10 +22,7 @@ export const getMatchingStandard = (text: string) => {
     
     std.keywords.forEach(keyword => {
        if (target.includes(keyword)) {
-         // 1. 기본 점수 부여
          score += 1;
-
-         // 2. 중요 명사가 포함된 경우 가중치 대폭 부여 (+10점)
          if (primaryKeywords.includes(keyword)) {
             score += 10;
          }
@@ -43,21 +31,18 @@ export const getMatchingStandard = (text: string) => {
     return { ...std, score };
   });
 
-  // 점수가 높은 순으로 정렬
   const matches = candidates.filter(c => c.score > 0);
   matches.sort((a, b) => b.score - a.score);
 
   return matches.length > 0 ? matches[0] : undefined;
 };
 
-// Helper to chunk array for photo rows
 const chunk = <T>(arr: T[], size: number): T[][] => {
   return Array.from({ length: Math.ceil(arr.length / size) }, (v, i) =>
     arr.slice(i * size, i * size + size)
   );
 };
 
-// Helper to get URL string from PhotoItem
 const getSrc = (item: PhotoItem): string => {
   if (typeof item === 'string') return item;
   return item.url;
@@ -68,7 +53,6 @@ const getSrc = (item: PhotoItem): string => {
 const contentContainerStyle = "width: 794px; padding: 0 50px; font-family: 'Apple SD Gothic Neo', sans-serif; box-sizing: border-box;";
 const innerContentStyle = "background: #fff; border-left: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; padding: 0 20px;";
 
-// Location Header Generator
 const getLocationHeaderHtml = (location: string, count: number) => {
   const countHtml = location === '공기질,라돈' 
     ? `<span style="transform: translateY(-8px);">측정 기록</span>`
@@ -87,7 +71,6 @@ const getLocationHeaderHtml = (location: string, count: number) => {
   `;
 };
 
-// Defect Header
 const getDefectHeaderHtml = (index: number, description: string) => `
   <div style="width: 794px; padding: 10px 50px 0px; font-family: 'Apple SD Gothic Neo', sans-serif; box-sizing: border-box;">
       <div style="background: #f1f5f9; padding: 10px 16px; border-radius: 8px 8px 0 0; border: 1px solid #cbd5e1; border-bottom: none;">
@@ -101,8 +84,8 @@ const getDefectHeaderHtml = (index: number, description: string) => `
   </div>
 `;
 
+// ✨ PDF 사진 비율 최적화 로직 적용 (잘림 방지 + 한 줄에 2장씩 배치)
 const getPhotoSectionHtml = (title: string, colorCode: string, photos: PhotoItem[]) => {
-  // Reverted to 2 columns for larger photos
   const rows = chunk(photos, 2);
   let html = `
     <div style="${contentContainerStyle}">
@@ -121,8 +104,8 @@ const getPhotoSectionHtml = (title: string, colorCode: string, photos: PhotoItem
         <div style="${innerContentStyle} padding-bottom: 6px;">
           <div style="display: flex; gap: 14px;">
             ${row.map(p => `
-              <div style="width: 320px; height: 240px; flex-shrink: 0; border-radius: 4px; overflow: hidden; border: 1px solid #e2e8f0; background: #f8fafc;">
-                  <img src="${getSrc(p)}" style="width: 100%; height: 100%; object-fit: cover;" />
+              <div style="width: 320px; height: 320px; flex-shrink: 0; border-radius: 4px; overflow: hidden; border: 1px solid #e2e8f0; background: #f8fafc; display: flex; align-items: center; justify-content: center;">
+                  <img src="${getSrc(p)}" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
               </div>
             `).join('')}
           </div>
@@ -147,7 +130,6 @@ const getStandardHtml = (standard: any) => `
   </div>
 `;
 
-// Reduced Margin Bottom to 0px
 const getDividerHtml = () => `
   <div style="${contentContainerStyle} margin-bottom: 0px;">
       <div style="border-top: 1px solid #cbd5e1; height: 1px;"></div>
@@ -196,14 +178,12 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
   container.style.backgroundColor = 'white';
   document.body.appendChild(container);
 
-  // --- Rendering Helpers ---
-
   const captureAndAdd = async (html: string) => {
     container.innerHTML = html;
     await new Promise(resolve => setTimeout(resolve, 50));
 
     const canvas = await html2canvas(container, {
-      scale: 2, // Increased scale for better quality
+      scale: 2, 
       useCORS: true,
       logging: false,
       windowWidth: 794,
@@ -211,7 +191,7 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
       backgroundColor: '#ffffff'
     });
 
-    const imgData = canvas.toDataURL('image/jpeg', 0.9); // Increased quality
+    const imgData = canvas.toDataURL('image/jpeg', 0.9); 
     const imgHeight = (canvas.height * pageWidth) / canvas.width;
 
     if (cursorY + imgHeight > pageHeight) {
@@ -227,7 +207,6 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
   const renderToImageData = async (html: string) => {
     container.innerHTML = html;
     
-    // Wait for all images in the container to load
     const images = Array.from(container.querySelectorAll('img'));
     await Promise.all(images.map(img => {
       if (img.complete) return Promise.resolve();
@@ -235,7 +214,6 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
         img.onload = resolve;
         img.onerror = () => {
           console.warn('Image failed to load in PDF:', img.src);
-          // Set a fallback transparent 1x1 image on error so html2canvas doesn't crash
           img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
           resolve(null);
         };
@@ -244,7 +222,7 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
 
     await new Promise(resolve => setTimeout(resolve, 50));
     const canvas = await html2canvas(container, {
-      scale: 2, // Increased scale for better quality
+      scale: 2, 
       useCORS: true,
       logging: false,
       windowWidth: 794,
@@ -252,13 +230,12 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
       backgroundColor: '#ffffff'
     });
     const imgHeight = (canvas.height * pageWidth) / canvas.width;
-    const imgData = canvas.toDataURL('image/jpeg', 0.9); // Increased quality
+    const imgData = canvas.toDataURL('image/jpeg', 0.9); 
     container.innerHTML = '';
     return { imgData, imgHeight };
   };
 
   try {
-    // 1. HEADER
     const headerHtml = `
       <div style="width: 794px; font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; background: #fff;">
         <div style="background-color: #172447; padding: 30px 50px;">
@@ -280,7 +257,7 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
 
         <div style="padding: 20px 50px; border-bottom: 8px solid #f8fafc;">
            <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
-              <tr>
+             <tr>
                  <td style="width: 32%; padding-right: 20px; vertical-align: middle;">
                     <div style="font-size: 11px; font-weight: 800; color: #94a3b8; margin-bottom: 6px;">아파트명</div>
                     <div style="font-size: 18px; font-weight: 800; color: #0f172a; line-height: 1.3;">${info.apartmentName}</div>
@@ -297,13 +274,13 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
                      <div style="font-size: 11px; font-weight: 800; color: #94a3b8; margin-bottom: 6px;">점검일자</div>
                      <div style="font-size: 16px; font-weight: 800; color: #0f172a;">${info.date.split('T')[0]}</div>
                  </td>
-              </tr>
+             </tr>
            </table>
 
            <div style="height: 12px;"></div>
 
            <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
-              <tr>
+             <tr>
                  <td style="width: 35%; padding-right: 20px; vertical-align: middle;">
                     <div style="font-size: 11px; font-weight: 800; color: #94a3b8; margin-bottom: 6px;">고객명</div>
                     <div style="font-size: 18px; font-weight: 800; color: #0f172a;">${info.inspectorName}</div>
@@ -322,14 +299,13 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
                         </table>
                     </div>
                  </td>
-              </tr>
+             </tr>
            </table>
         </div>
       </div>
     `;
     await captureAndAdd(headerHtml);
 
-    // 2. DEFECTS PROCESSING
     const grouped = defects.reduce((acc, d) => {
       (acc[d.location] = acc[d.location] || []).push(d);
       return acc;
@@ -351,10 +327,7 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
         const d = defectsInLocation[i];
         const standard = getMatchingStandard(d.description);
 
-        // --- ATOMIC RENDERING STRATEGY ---
         const parts: string[] = [];
-
-        // CRITICAL: If this is the FIRST defect of the location, PREPEND the Location Header
         if (i === 0) {
             parts.push(getLocationHeaderHtml(location, defectsInLocation.length));
         }
@@ -364,7 +337,6 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
         if (d.nearPhotos.length > 0) parts.push(getPhotoSectionHtml('근거리 사진 (상세 하자)', '#0369a1', d.nearPhotos));
         if (standard) parts.push(getStandardHtml(standard));
         
-        // Append Radon Legal HTML if it's the last item in the '공기질,라돈' location
         if (location === '공기질,라돈' && i === defectsInLocation.length - 1) {
             parts.push(getRadonLegalHtml());
         }
@@ -372,25 +344,16 @@ export const generatePDFBlob = async (info: InspectionInfo, defects: DefectItem[
         parts.push(getDividerHtml());
 
         const fullDefectHtml = parts.join('');
-
-        // 1. Render to an image in memory to check its height
         const { imgData, imgHeight } = await renderToImageData(fullDefectHtml);
 
-        // 2. Decision Logic
         if (imgHeight < pageHeight) {
-          // Case A: The whole defect block fits on a single page
-          // Check if it fits in the *current* remaining space.
           if (cursorY + imgHeight > pageHeight) {
             pdf.addPage();
             cursorY = 0;
           }
           pdf.addImage(imgData, 'JPEG', 0, cursorY, pageWidth, imgHeight);
           cursorY += imgHeight;
-
         } else {
-          // Case B: The defect is HUGE (too many photos). It exceeds A4 height on its own.
-          // We MUST split it component by component.
-          // Start on a new page to give it maximum initial space.
           if (cursorY > 20) { 
              pdf.addPage();
              cursorY = 0;
